@@ -1,12 +1,14 @@
 package middlewares
 
 import (
+	"context"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"todo/db"
 )
+
+const ContextUserKey = "user"
 
 func preprocessToken(token string) (string, error) {
 	split := strings.Split(token, " ")
@@ -19,23 +21,20 @@ func preprocessToken(token string) (string, error) {
 	return split[1], nil
 }
 
-func Authenticate(next http.HandlerFunc) http.HandlerFunc {
+func AuthenticateUser(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, err := preprocessToken(r.Header.Get("Authorization"))
 		if err != nil {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		userId, err := db.AuthenticateUser(token)
+		user, err := db.AuthenticateUser(token)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-		r.Header.Set("UserId", strconv.Itoa(userId))
+		ctx := context.WithValue(r.Context(), ContextUserKey, user)
+		r = r.WithContext(ctx)
 		next.ServeHTTP(w, r)
 	})
-}
-
-func GetUserIdFromAuthenticatedRequest(r *http.Request) (int, error) {
-	return strconv.Atoi(r.Header.Get("UserId"))
 }

@@ -77,10 +77,10 @@ func LoginUser(user models.User) (string, error) {
 	return updateToken(user.Id)
 }
 
-func AuthenticateUser(token string) (int, error) {
-	var userId int
+func AuthenticateUser(token string) (models.User, error) {
+	var user models.User
 	expiration := time.Now()
-	stmt := `SELECT id FROM users WHERE token = ? AND expiration > ?`
-	err := getDb().QueryRow(stmt, token, expiration).Scan(&userId)
-	return userId, err
+	stmt := `SELECT id, name FROM users WHERE token = ? AND expiration > ?`
+	err := getDb().QueryRow(stmt, token, expiration).Scan(&user.Id, &user.Name)
+	return user, err
 }
