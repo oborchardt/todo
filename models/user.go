@@ -25,31 +25,16 @@ func (user *User) CheckPassword(hashedPassword []byte) error {
 }
 
 type UserLogin struct {
-	UserId   *int    `json:"userId"`
+	Name     *string `json:"name"`
 	Password *string `json:"password"`
 }
 
 func UserFromLogin(login UserLogin) (User, error) {
 	var user User
-	if login.UserId == nil || login.Password == nil {
-		return user, errors.New("User ID and password have to be provided.")
+	if login.Name == nil || login.Password == nil {
+		return user, errors.New("User name and password have to be provided.")
 	}
-	user.Id = *login.UserId
+	user.Name = *login.Name
 	user.SetPassword(*login.Password)
-	return user, nil
-}
-
-type UserCreate struct {
-	Name     *string `json:"name"`
-	Password *string `json:"password"`
-}
-
-func UserFromCreate(create UserCreate) (User, error) {
-	var user User
-	if create.Name == nil || create.Password == nil {
-		return user, errors.New("User name and password have to be provided")
-	}
-	user.Name = *create.Name
-	user.SetPassword(*create.Password)
 	return user, nil
 }

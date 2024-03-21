@@ -18,12 +18,12 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateUser(w http.ResponseWriter, r *http.Request) {
-	var userCreate models.UserCreate
+	var userCreate models.UserLogin
 	if err := json.NewDecoder(r.Body).Decode(&userCreate); err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	user, err := models.UserFromCreate(userCreate)
+	user, err := models.UserFromLogin(userCreate)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return

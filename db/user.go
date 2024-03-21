@@ -3,7 +3,10 @@ package db
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"github.com/mattn/go-sqlite3"
 	"time"
+	"todo/logger"
 	"todo/models"
 )
 
@@ -52,22 +55,36 @@ func updateToken(userId int) (string, error) {
 	tokenLength := 32
 	expiration := time.Now().Add(time.Minute * time.Duration(5))
 	stmt := `UPDATE users SET token = ?, expiration = ? WHERE id = ? RETURNING token`
-	// add while loop if random token is not unique
-	token, err := createUserToken(tokenLength)
-	if err != nil {
-		return "", err
+	// while loop if random token is not unique
+	created := false
+	var token string
+	for !created {
+		var err error
+		token, err = createUserToken(tokenLength)
+		if err != nil {
+			return "", err
+		}
+		if err = getDb().QueryRow(stmt, token, expiration, userId).Scan(&token); err != nil {
+			var sqliteErr sqlite3.Error
+			if errors.As(err, &sqliteErr) {
+				if sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+					logger.Warning(sqliteErr.Error())
+					continue
+				}
+			}
+			return "", err
+		}
+		created = true
 	}
-	if err = getDb().QueryRow(stmt, token, expiration, userId).Scan(&token); err != nil {
-		return "", err
-	}
+
 	return token, nil
 }
 
 func LoginUser(user models.User) (string, error) {
 	// check user and password
 	var password string
-	stmt := `SELECT password FROM users WHERE id = ?`
-	if err := getDb().QueryRow(stmt, user.Id).Scan(&password); err != nil {
+	stmt := `SELECT id, password FROM users WHERE name = ?`
+	if err := getDb().QueryRow(stmt, user.Name).Scan(&user.Id, &password); err != nil {
 		return "", err
 	}
 	if err := user.CheckPassword([]byte(password)); err != nil {

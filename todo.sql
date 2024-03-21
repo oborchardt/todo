@@ -16,14 +16,14 @@ CREATE TABLE todos(
     text TEXT,
     is_done BOOLEAN,
     user_id INTEGER NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE users_todos(
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
     todo_id INTEGER,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (todo_id) REFERENCES todos(id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE,
     UNIQUE (user_id, todo_id)
 )

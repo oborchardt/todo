@@ -28,7 +28,7 @@ func GetTodos(userId int, includeShared bool) ([]models.Todo, error) {
 	var todos []models.Todo
 	var stmt string
 	if includeShared {
-		stmt = `SELECT t.id, t.title, t.text, t.is_done, t.user_id FROM todos AS t LEFT OUTER JOIN users_todos AS u ON (t.id = u.todo_id) WHERE t.user_id = $1 OR u.user_id = $1`
+		stmt = `SELECT DISTINCT(t.id), t.title, t.text, t.is_done, t.user_id FROM todos AS t LEFT JOIN users_todos AS u ON (t.id = u.todo_id) WHERE t.user_id = $1 OR u.user_id = $1`
 	} else {
 		stmt = `SELECT id, title, text, is_done, user_id FROM todos WHERE user_id = ?`
 	}
@@ -63,14 +63,29 @@ func UpdateTodo(todo models.Todo) error {
 	return err
 }
 
-func DeleteTodo(todoId int) error {
-	stmt := `DELETE FROM todos WHERE id = ?;`
-	err := getDb().QueryRow(stmt, todoId).Scan()
-	// query returns no rows but that is intended
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
+func DeleteTodo(todoId int) (models.Todo, error) {
+	var todo models.Todo
+	stmt := `DELETE FROM todos WHERE id = ? RETURNING id, title, text, is_done, user_id;`
+	err := getDb().QueryRow(stmt, todoId).Scan(&todo.Id, &todo.Title, &todo.Text, &todo.IsDone, &todo.UserId)
+	return todo, err
+}
+
+func GetTodoShares(todoId int) ([]int, error) {
+	var shares []int
+	stmt := `SELECT user_id FROM users_todos WHERE todo_id = ?`
+	rows, err := getDb().Query(stmt, todoId)
+	if err != nil {
+		return shares, err
 	}
-	return err
+	for rows.Next() {
+		var share int
+		err := rows.Scan(&share)
+		if err != nil {
+			return shares, err
+		}
+		shares = append(shares, share)
+	}
+	return shares, nil
 }
 
 func CreateTodoShare(todoId int, userId int) (int, error) {
