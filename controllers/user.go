@@ -17,6 +17,8 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(users)
 }
 
+// CreateUser creates a user from the username and password specified in the request body. If it succeeds it returns a
+// token in the response body.
 func CreateUser(w http.ResponseWriter, r *http.Request) {
 	var userCreate models.UserLogin
 	if err := json.NewDecoder(r.Body).Decode(&userCreate); err != nil {
@@ -39,5 +41,5 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(token)
+	json.NewEncoder(w).Encode(loginResponse{Token: token})
 }

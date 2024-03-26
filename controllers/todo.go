@@ -2,30 +2,43 @@ package controllers
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
 	"todo/db"
+	"todo/logger"
 	"todo/middlewares"
 	"todo/models"
 )
 
+func getTodoFromPathId(r *http.Request, w http.ResponseWriter) (models.Todo, error) {
+	var todo models.Todo
+	todoId, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "No todo id was given in the request path", http.StatusBadRequest)
+		return todo, errors.New("No proper id was given for a todo in the request path")
+	}
+	todo, err = db.GetTodo(todoId)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return todo, err
+	}
+	return todo, nil
+}
+
+// GetTodo returns a [models.Todo] with an ID specified as a request path value. It also requires that the user is
+// authorized by [middlewares.AuthenticateUser] as it expects the request's context to have a user object.
+// If the query for the [models.Todo] succeeds it is returned as JSON in the response body.
 func GetTodo(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(middlewares.ContextUserKey).(models.User)
-	fmt.Println(user)
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
-	todoId, err := strconv.Atoi(r.PathValue("id"))
+	todo, err := getTodoFromPathId(r, w)
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-	todo, err := db.GetTodo(todoId)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		logger.Error(err.Error())
 		return
 	}
 	if todo.UserId != user.Id {
@@ -36,16 +49,18 @@ func GetTodo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !slices.Contains(userShares, user.Id) {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
 	}
 	json.NewEncoder(w).Encode(todo)
 }
 
+// GetTodos returns a list of [models.Todo] with an ID specified as a request path value. It also requires that the user is
+// authorized by [middlewares.AuthenticateUser] as it expects the request's context to have a user object.
+// If the query for the list succeeds it is returned as JSON in the response body.
 func GetTodos(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(middlewares.ContextUserKey).(models.User)
-	fmt.Println(user)
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
@@ -61,6 +76,9 @@ func GetTodos(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(todos)
 }
 
+// CreateTodo creates a [models.Todo] based on the corresponding fields in the request body. It expects the request
+// to be authorized by [middlewares.AuthenticateUser] as it expects the request's context to have a user object.
+// If the the object is created and persisted successfully it is returned as JSON in the response body.
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(middlewares.ContextUserKey).(models.User)
 	if !ok {
@@ -82,62 +100,67 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(todo)
 }
 
+// DeleteTodo deletes a [models.Todo] based on the request's path value. It expects the request
+// to be authorized by [middlewares.AuthenticateUser] as it expects the request's context to have a user object.
+// If the the object is deleted successfully it is returned as JSON in the response body.
 func DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(middlewares.ContextUserKey).(models.User)
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
-	todoId, err := strconv.Atoi(r.PathValue("id"))
+	todo, err := getTodoFromPathId(r, w)
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-	todo, err := db.GetTodo(todoId)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		logger.Error(err.Error())
 		return
 	}
 	if todo.UserId != user.Id {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 	deletedTodo, err := db.DeleteTodo(todo.Id)
 	if err != nil {
+		logger.Error(err.Error())
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	json.NewEncoder(w).Encode(deletedTodo)
 }
 
+// UpdateTodo updates a [models.Todo] based on the corresponding fields in the request body. The [models.Todo] to update is
+// specified as a path value. The request body with the fields to update must not provide all fields of a [models.Todo]
+// but only the fields that should be updated. It expects the request to be authorized by [middlewares.AuthenticateUser]
+// as it expects the request's context to have a user object. If the the object is updated successfully the updated
+// object is returned as JSON in the response body.
 func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(middlewares.ContextUserKey).(models.User)
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
-	todoId, err := strconv.Atoi(r.PathValue("id"))
+	todo, err := getTodoFromPathId(r, w)
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-	todo, err := db.GetTodo(todoId)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		logger.Error(err.Error())
 		return
 	}
 	if todo.UserId != user.Id {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 	var todoUpdate models.TodoUpdate
 	if err := json.NewDecoder(r.Body).Decode(&todoUpdate); err != nil {
+		logger.Error(err.Error())
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 	todo.Update(todoUpdate)
-	db.UpdateTodo(todo)
+	if err := db.UpdateTodo(todo); err != nil {
+		logger.Error(err.Error())
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 	if err := json.NewEncoder(w).Encode(todo); err != nil {
+		logger.Error(err.Error())
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -149,16 +172,16 @@ type TodoShare struct {
 	UserId *int `json:"userId"`
 }
 
-// CanEditShare(user_id, todo_id / todo_object) funktion o.ä um Code-Duplizierung zu vermeiden!
+// ShareTodo shares a [model.Todo] with another [models.User] that is not the creator of the [models.Todo].
 func ShareTodo(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(middlewares.ContextUserKey).(models.User)
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
-	todoId, err := strconv.Atoi(r.PathValue("id"))
+	todo, err := getTodoFromPathId(r, w)
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		logger.Error(err.Error())
 		return
 	}
 	var todoShare TodoShare
@@ -166,18 +189,13 @@ func ShareTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	todoShare.TodoId = &todoId
+	todoShare.TodoId = &todo.Id
 	if todoShare.TodoId == nil || todoShare.UserId == nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	todo, err := db.GetTodo(*todoShare.TodoId)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
 	if user.Id != todo.UserId {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 	if todo.UserId == *todoShare.UserId {
@@ -186,25 +204,28 @@ func ShareTodo(w http.ResponseWriter, r *http.Request) {
 	}
 	shareId, err := db.CreateTodoShare(*todoShare.TodoId, *todoShare.UserId)
 	if err != nil {
+		logger.Error(err.Error())
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	todoShare.Id = shareId
 	if err := json.NewEncoder(w).Encode(todoShare); err != nil {
+		logger.Error(err.Error())
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 }
 
+// UnshareTodo removes a [models.User] from the users a [model.Todo] is shared with.
 func UnshareTodo(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(middlewares.ContextUserKey).(models.User)
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
-	todoId, err := strconv.Atoi(r.PathValue("id"))
+	todo, err := getTodoFromPathId(r, w)
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		logger.Error(err.Error())
 		return
 	}
 	var todoShare TodoShare
@@ -212,18 +233,13 @@ func UnshareTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	todoShare.TodoId = &todoId
+	todoShare.TodoId = &todo.Id
 	if todoShare.TodoId == nil || todoShare.UserId == nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	todo, err := db.GetTodo(*todoShare.TodoId)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
 	if user.Id != todo.UserId {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 	shareId, err := db.DeleteTodoShare(*todoShare.TodoId, *todoShare.UserId)

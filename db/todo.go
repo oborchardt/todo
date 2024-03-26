@@ -6,6 +6,8 @@ import (
 	"todo/models"
 )
 
+// CreateTodo creates a [models.Todo] from the parameters and inserts it into the database. If the insert was successful
+// the object is returned, otherwise an error is returned
 func CreateTodo(title string, text string, userId int, isDone bool) (models.Todo, error) {
 	stmt := `INSERT INTO todos(title, text, user_id, is_done) VALUES (?, ?, ?, ?) RETURNING id`
 	id := 0
@@ -24,6 +26,8 @@ func CreateTodo(title string, text string, userId int, isDone bool) (models.Todo
 	return todo, nil
 }
 
+// GetTodos fetches the [models.Todo]s created by a [models.User] with id userId. If includeShared is set to true, all
+// the todos shared with that user are also included
 func GetTodos(userId int, includeShared bool) ([]models.Todo, error) {
 	var todos []models.Todo
 	var stmt string
@@ -47,6 +51,7 @@ func GetTodos(userId int, includeShared bool) ([]models.Todo, error) {
 	return todos, nil
 }
 
+// GetTodo fetches the [models.Todo] with the [models.Todo.Id] equal to todoId from the database.
 func GetTodo(todoId int) (models.Todo, error) {
 	var todo models.Todo
 	stmt := `SELECT id, title, text, is_done, user_id FROM todos WHERE id = ?`
@@ -54,6 +59,8 @@ func GetTodo(todoId int) (models.Todo, error) {
 	return todo, err
 }
 
+// UpdateTodo sets all values of the row in the database equal to the editable fields of todo. The id for the row is
+// taken from the [models.Todo.Id] of todo.
 func UpdateTodo(todo models.Todo) error {
 	stmt := `UPDATE todos SET title = ?, text = ?, is_done = ?, user_id = ? WHERE id = ?`
 	err := getDb().QueryRow(stmt, todo.Title, todo.Text, todo.IsDone, todo.UserId, todo.Id).Scan()
@@ -63,6 +70,7 @@ func UpdateTodo(todo models.Todo) error {
 	return err
 }
 
+// DeleteTodo deletes a [models.Todo] from the database where its [models.Todo.Id] is equal to todoId
 func DeleteTodo(todoId int) (models.Todo, error) {
 	var todo models.Todo
 	stmt := `DELETE FROM todos WHERE id = ? RETURNING id, title, text, is_done, user_id;`
@@ -70,6 +78,7 @@ func DeleteTodo(todoId int) (models.Todo, error) {
 	return todo, err
 }
 
+// GetTodoShares fetches all the user ids the [models.Todo] is shared with
 func GetTodoShares(todoId int) ([]int, error) {
 	var shares []int
 	stmt := `SELECT user_id FROM users_todos WHERE todo_id = ?`
@@ -88,6 +97,7 @@ func GetTodoShares(todoId int) ([]int, error) {
 	return shares, nil
 }
 
+// CreateTodoShare inserts a share of a [models.Todo] with user userId in the database
 func CreateTodoShare(todoId int, userId int) (int, error) {
 	stmt := `INSERT INTO users_todos(todo_id, user_id) VALUES (?, ?) RETURNING id`
 	var shareId int
@@ -95,6 +105,7 @@ func CreateTodoShare(todoId int, userId int) (int, error) {
 	return shareId, err
 }
 
+// CreateTodoShare deletes a share of a [models.Todo] with user userId in the database
 func DeleteTodoShare(todoId int, userId int) (int, error) {
 	stmt := `DELETE FROM users_todos WHERE todo_id = ? AND user_id = ? RETURNING id`
 	var shareId int
